@@ -19,6 +19,22 @@ export async function POST(req) {
     const imageBlob = formData.get('image');
     const language = formData.get('language') || 'Urdu/Punjabi';
     const weather = formData.get('weather');
+    const historyRaw = formData.get('history');
+
+    let historyText = "";
+    if (historyRaw) {
+      try {
+        const parsed = JSON.parse(historyRaw);
+        if (Array.isArray(parsed)) {
+          historyText = parsed
+            .filter((m) => m && (m.role === 'ai' || m.role === 'user') && typeof m.text === 'string')
+            .map((m) => `${m.role === 'ai' ? 'AI' : 'Farmer'}: ${m.text}`)
+            .join('\n\n');
+        }
+      } catch (e) {
+        console.error("Failed to parse conversation history:", e);
+      }
+    }
 
     if (!audioBlob) {
       return NextResponse.json({ error: "Audio is required." }, { status: 400 });
@@ -58,6 +74,11 @@ The user's requested language setting is: ${language}.
 ${language === 'Auto' ? 'Listen carefully to the audio. If the user speaks Punjabi, you MUST reply in pure Punjabi (using Shahmukhi/Urdu script). If they speak Sindhi, reply in Sindhi. If Urdu, reply in Urdu.' : `You MUST respond entirely in ${language}.`}
 
 ${weatherBlock}
+
+PREVIOUS CONVERSATION HISTORY:
+${historyText ? historyText : "(No previous conversation - this is a brand new consultation.)"}
+
+FOLLOW-UP INSTRUCTION: Use the above history as context for follow-up questions. If the farmer refers to something discussed earlier (for example: "Kal wali dawai kab spray karun?"), you MUST identify which medicine, disease, or advice was discussed and answer based on that context.
 
 KNOWLEDGE BASE (Official Guidelines):
 ${knowledgeBase ? knowledgeBase : "No additional guidelines provided."}

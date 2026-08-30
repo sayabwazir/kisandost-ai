@@ -4,6 +4,8 @@ import Image from "next/image";
 import { waitAudioBase64 } from "./waitAudio";
 import html2canvas from "html2canvas";
 
+const HISTORY_KEY = "kisandost_chat_history";
+
 export default function Home() {
   const [isRecording, setIsRecording] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -19,6 +21,36 @@ export default function Home() {
   const imageFileRef = useRef(null);
   const ticketRef = useRef(null);
   const weatherPromiseRef = useRef(null);
+  const [historyLoaded, setHistoryLoaded] = useState(false);
+
+  // --- CONVERSATION HISTORY (localStorage) ---
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(HISTORY_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          setMessages(
+            parsed.filter(
+              (m) => m && (m.role === "ai" || m.role === "user") && typeof m.text === "string"
+            )
+          );
+        }
+      }
+    } catch (e) {
+      console.warn("Could not load chat history:", e);
+    }
+    setHistoryLoaded(true);
+  }, []);
+
+  useEffect(() => {
+    if (!historyLoaded) return;
+    try {
+      window.localStorage.setItem(HISTORY_KEY, JSON.stringify(messages));
+    } catch (e) {
+      console.warn("Could not save chat history:", e);
+    }
+  }, [messages, historyLoaded]);
 
   // --- CAMERA LOGIC ---
   const handleCameraClick = () => {
@@ -104,7 +136,6 @@ export default function Home() {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       mediaRecorderRef.current = new MediaRecorder(stream);
       audioChunksRef.current = [];
-      setMessages([]); // Clear previous messages
       weatherPromiseRef.current = fetchWeatherContext(); // Fire-and-forget while user speaks
 
       mediaRecorderRef.current.ondataavailable = (event) => {
@@ -135,6 +166,7 @@ export default function Home() {
     if (mediaRecorderRef.current && isRecording) {
       mediaRecorderRef.current.onstop = () => {
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        setMessages((prev) => [...prev, { role: 'user', text: 'Audio sawal (voice message)' }]);
         sendAudioToAPI(audioBlob);
       };
       mediaRecorderRef.current.stop();
@@ -174,6 +206,20 @@ export default function Home() {
     window.print();
   };
 
+  const startFresh = () => {
+    try {
+      window.localStorage.clear();
+    } catch (e) {
+      console.warn("Could not clear storage:", e);
+    }
+    setMessages([]);
+    setImagePreview(null);
+    setImageName("");
+    imageFileRef.current = null;
+    if (fileInputRef.current) fileInputRef.current.value = "";
+    if (audioRef.current) audioRef.current.pause();
+  };
+
   const sendAudioToAPI = async (audioBlob) => {
     setIsProcessing(true);
     try {
@@ -194,6 +240,20 @@ export default function Home() {
         if (weatherContext) {
           formData.append('weather', weatherContext);
         }
+      }
+
+      // Attach the last 3 conversation turns for follow-up context
+      try {
+        const recentTurns = messages.slice(-6).map((m) => ({
+          role: m.role,
+          text: m.text,
+          ...(m.prescription ? { prescription: m.prescription } : {}),
+        }));
+        if (recentTurns.length > 0) {
+          formData.append('history', JSON.stringify(recentTurns));
+        }
+      } catch (e) {
+        console.warn("Could not attach conversation history:", e);
       }
 
       const response = await fetch('/api/assistant', {
@@ -221,9 +281,9 @@ export default function Home() {
           playNext();
         }
         
-        // Replace messages with only the latest one
+        // Append the AI answer to the conversation history
         if (data.response) {
-          setMessages([{ role: 'ai', text: data.response, prescription: data.prescription }]);
+          setMessages((prev) => [...prev, { role: 'ai', text: data.response, prescription: data.prescription }]);
         }
       }
     } catch (error) {
@@ -331,6 +391,19 @@ export default function Home() {
               <span className="text-sm font-bold">Gallery</span>
             </button>
           </div>
+
+          {/* Start Fresh Button */}
+          <button 
+            type="button"
+            onClick={startFresh}
+            disabled={isProcessing || isRecording}
+            className="w-full flex items-center justify-center gap-2 bg-white border-2 border-red-400 text-red-500 hover:bg-red-50 rounded-2xl p-3 shadow-sm transition-transform transform active:scale-95 disabled:opacity-50"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.665 48.665 0 00-7.5 0" />
+            </svg>
+            <span className="text-sm font-bold">Naya Masla (Start Fresh)</span>
+          </button>
         </div>
         
         {/* Image Preview Area */}
@@ -360,6 +433,14 @@ export default function Home() {
         <div className="w-full max-w-sm px-2 pb-6 flex flex-col items-center">
           {messages.map((msg, idx) => (
              <div key={idx} className="w-full">
+               {msg.role === 'user' ? (
+                 <div className="flex justify-end mt-4">
+                   <div className="bg-agri-green text-white rounded-2xl rounded-br-sm shadow-md p-3 max-w-[85%] text-sm font-medium">
+                     🎤 {msg.text}
+                   </div>
+                 </div>
+               ) : (
+               <>
                {/* AI Text Response */}
                <div className="bg-white rounded-xl shadow-md p-4 mt-4 border border-agri-green/20">
                  <h3 className="text-agri-green font-bold text-lg mb-2">AI Nuskha:</h3>
@@ -405,6 +486,8 @@ export default function Home() {
                      PDF / Image Download Karein
                    </button>
                  </>
+               )}
+               </>
                )}
              </div>
           ))}
