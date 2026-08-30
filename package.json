@@ -3,13 +3,19 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
+    "dev": "next dev --webpack",
+    "build": "next build --webpack",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "next lint"
   },
   "dependencies": {
+    "@ducanh2912/next-pwa": "^10.2.9",
+    "@google/genai": "^2.15.0",
+    "@google/generative-ai": "^0.24.1",
+    "google-tts-api": "^2.0.2",
+    "html2canvas": "^1.4.1",
     "next": "16.3.0",
+    "openai": "^7.4.0",
     "react": "19.2.8",
     "react-dom": "19.2.8"
   },

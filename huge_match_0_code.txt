@@ -1,0 +1,64 @@
+import Image from "next/image";
+
+export default function Home() {
+  return (
+    <main className="flex flex-col min-h-screen bg-background font-sans">
+      
+      {/* Header */}
+      <header className="bg-agri-green text-white p-4 shadow-md flex justify-between items-center rounded-b-3xl">
+        <div className="flex items-center gap-2">
+          {/* A simple placeholder logo */}
+          <div className="w-10 h-10 bg-agri-accent rounded-full flex items-center justify-center font-bold text-xl">
+            🌱
+          </div>
+          <h1 className="text-2xl font-bold tracking-wide">Kisan-Dost AI</h1>
+        </div>
+      </header>
+
+      {/* Main Content Area */}
+      <section className="flex-1 flex flex-col items-center justify-center p-6 gap-8">
+        
+        {/* Instruction Text */}
+        <div className="text-center">
+          <h2 className="text-2xl md:text-3xl font-bold text-agri-green mb-2">
+            Apna Masla Batayen
+          </h2>
+          <p className="text-gray-600 text-lg">
+            Neechay button daba kar apni zaban mein baat karein.
+          </p>
+        </div>
+
+        {/* Action Buttons */}
+        <div className="flex flex-col gap-6 w-full max-w-sm">
+          {/* Big Mic Button */}
+          <button className="flex flex-col items-center justify-center gap-3 bg-agri-green hover:bg-agri-green/90 text-white rounded-3xl p-8 shadow-lg transition-transform transform hover:scale-105 active:scale-95">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-16 h-16">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 18.75a6 6 0 006-6v-1.5m-6 7.5a6 6 0 01-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 01-3-3V4.5a3 3 0 116 0v8.25a3 3 0 01-3 3z" />
+            </svg>
+            <span className="text-2xl font-bold">Bol Kar Batayen</span>
+          </button>
+
+          {/* Camera Button */}
+          <button className="flex items-center justify-center gap-3 bg-white border-2 border-agri-green text-agri-green hover:bg-agri-light rounded-2xl p-4 shadow-sm transition-transform transform hover:scale-105 active:scale-95">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-8 h-8">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0zM18.75 10.5h.008v.008h-.008V10.5z" />
+            </svg>
+            <span className="text-lg font-bold">Tasweer Khinchein</span>
+          </button>
+        </div>
+
+      </section>
+
+      {/* Language Selector Footer */}
+      <footer className="bg-white p-4 shadow-inner mt-auto">
+        <p className="text-center text-sm text-gray-500 mb-2">Zaban Muntakhib Karein (Select Language)</p>
+        <div className="flex justify-center gap-4">
+          <button className="px-4 py-2 bg-agri-green text-white rounded-full font-bold shadow hover:bg-agri-green/90 transition">🇵🇰 Urdu</button>
+          <button className="px-4 py-2 bg-gray-100 text-gray-700 rounded-full font-bold shadow hover:bg-gray-200 transition border border-gray-200">🌾 Punjabi</button>
+          <button className="px-4 py-2 bg-gray-100 text-gray-700 rounded-full font-bold shadow hover:bg-gray-200 transition border border-gray-200">🐪 Sindhi</button>
+        </div>
+      </footer>
+    </main>
+  );
+}

@@ -1,0 +1,21 @@
+{
+  "name": "Kisan-Dost AI",
+  "short_name": "KisanDost",
+  "description": "Aap ka zarkhaiz sathi. Pakistani kisano ke liye AI assistant.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#16a34a",
+  "icons": [
+    {
+      "src": "/icons/icon.jpg",
+      "sizes": "192x192",
+      "type": "image/jpeg"
+    },
+    {
+      "src": "/icons/icon.jpg",
+      "sizes": "512x512",
+      "type": "image/jpeg"
+    }
+  ]
+}
