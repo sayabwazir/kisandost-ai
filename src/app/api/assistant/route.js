@@ -1,12 +1,19 @@
 import { NextResponse } from 'next/server';
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import * as googleTTS from 'google-tts-api';
 import fs from "fs";
 import path from "path";
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-
 export async function POST(req) {
   try {
+    if (!process.env.GEMINI_API_KEY) {
+      return NextResponse.json(
+        { error: "GEMINI_API_KEY is not set on the server. Add it in Vercel project Settings > Environment Variables." },
+        { status: 500 }
+      );
+    }
+    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+
     const formData = await req.formData();
     const audioBlob = formData.get('audio');
     const imageBlob = formData.get('image');
@@ -125,7 +132,6 @@ DO NOT wrap the response in markdown blocks like \`\`\`json. Just return the raw
     let audioChunks = [];
     if (nativeUrdu) {
       try {
-        const googleTTS = require('google-tts-api');
         const results = await googleTTS.getAllAudioBase64(nativeUrdu, {
           lang: 'ur',
           slow: false,

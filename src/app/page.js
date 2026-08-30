@@ -45,49 +45,62 @@ export default function Home() {
         return;
       }
 
-      navigator.geolocation.getCurrentPosition(
-        async (position) => {
-          try {
-            const { latitude, longitude } = position.coords;
-            const res = await fetch(
-              `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current_weather=true`
-            );
-            if (!res.ok) {
+      try {
+        navigator.geolocation.getCurrentPosition(
+          async (position) => {
+            try {
+              const { latitude, longitude } = position.coords;
+              const res = await fetch(
+                `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current_weather=true`
+              );
+              if (!res.ok) {
+                resolve(null);
+                return;
+              }
+              const data = await res.json();
+              const cw = data.current_weather;
+              if (!cw) {
+                resolve(null);
+                return;
+              }
+              const WEATHER_CODES = {
+                0: "Clear sky", 1: "Mainly clear", 2: "Partly cloudy", 3: "Overcast",
+                45: "Fog", 48: "Fog", 51: "Light drizzle", 53: "Drizzle", 55: "Heavy drizzle",
+                61: "Light rain", 63: "Rain", 65: "Heavy rain", 66: "Freezing rain", 67: "Freezing rain",
+                80: "Rain showers", 81: "Rain showers", 82: "Heavy rain showers",
+                95: "Thunderstorm", 96: "Thunderstorm with hail", 99: "Thunderstorm with hail",
+              };
+              const conditions = WEATHER_CODES[cw.weathercode] || `Weather code ${cw.weathercode}`;
+              resolve(`Temp: ${cw.temperature}C, Wind: ${cw.windspeed}km/h, Conditions: ${conditions}`);
+            } catch (e) {
+              console.error("Weather fetch failed:", e);
               resolve(null);
-              return;
             }
-            const data = await res.json();
-            const cw = data.current_weather;
-            if (!cw) {
-              resolve(null);
-              return;
-            }
-            const WEATHER_CODES = {
-              0: "Clear sky", 1: "Mainly clear", 2: "Partly cloudy", 3: "Overcast",
-              45: "Fog", 48: "Fog", 51: "Light drizzle", 53: "Drizzle", 55: "Heavy drizzle",
-              61: "Light rain", 63: "Rain", 65: "Heavy rain", 66: "Freezing rain", 67: "Freezing rain",
-              80: "Rain showers", 81: "Rain showers", 82: "Heavy rain showers",
-              95: "Thunderstorm", 96: "Thunderstorm with hail", 99: "Thunderstorm with hail",
-            };
-            const conditions = WEATHER_CODES[cw.weathercode] || `Weather code ${cw.weathercode}`;
-            resolve(`Temp: ${cw.temperature}C, Wind: ${cw.windspeed}km/h, Conditions: ${conditions}`);
-          } catch (e) {
-            console.error("Weather fetch failed:", e);
+          },
+          (err) => {
+            console.warn("Geolocation unavailable, proceeding without weather:", err.message);
             resolve(null);
-          }
-        },
-        (err) => {
-          console.warn("Geolocation unavailable, proceeding without weather:", err.message);
-          resolve(null);
-        },
-        { timeout: 8000, maximumAge: 600000 }
-      );
+          },
+          { timeout: 8000, maximumAge: 600000 }
+        );
+      } catch (e) {
+        console.warn("Geolocation blocked, proceeding without weather:", e);
+        resolve(null);
+      }
     });
   };
 
   // --- MIC LOGIC ---
   const startRecording = async () => {
     try {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        alert("Is browser mein microphone support nahi hai. Barah-e-meherbani Chrome ya Safari ka latest version istemal karein.");
+        return;
+      }
+      if (typeof MediaRecorder === "undefined") {
+        alert("Is browser mein audio recording support nahi hai. Barah-e-meherbani Chrome ya Safari ka latest version istemal karein.");
+        return;
+      }
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       mediaRecorderRef.current = new MediaRecorder(stream);
       audioChunksRef.current = [];
@@ -104,7 +117,17 @@ export default function Home() {
       setIsRecording(true);
     } catch (error) {
       console.error("Error accessing microphone:", error);
-      alert("Microphone access is required.");
+      setIsRecording(false);
+      const name = error && error.name;
+      if (name === "NotAllowedError" || name === "SecurityError") {
+        alert("Microphone ki ijazat nahi mili. Browser ki settings mein ja kar mic permission allow karein, phir dobara koshish karein.");
+      } else if (name === "NotFoundError" || name === "OverconstrainedError") {
+        alert("Koi microphone nahi mila. Apna mic device check karein.");
+      } else if (name === "NotReadableError") {
+        alert("Microphone kisi aur application ke zair-e-istemal hai. Usay band kar ke dobara koshish karein.");
+      } else {
+        alert("Microphone kholne mein masla hua. Barah-e-meherbani dobara koshish karein.");
+      }
     }
   };
 
