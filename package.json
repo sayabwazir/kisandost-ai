@@ -13,7 +13,7 @@
     "@google/genai": "^2.15.0",
     "@google/generative-ai": "^0.24.1",
     "google-tts-api": "^2.0.2",
-    "html2canvas": "^1.4.1",
+    "html2canvas-pro": "^2.4.0",
     "next": "16.3.0",
     "openai": "^7.4.0",
     "react": "19.2.8",

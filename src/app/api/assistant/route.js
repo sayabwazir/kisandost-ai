@@ -28,7 +28,7 @@ export async function POST(req) {
         if (Array.isArray(parsed)) {
           historyText = parsed
             .filter((m) => m && (m.role === 'ai' || m.role === 'user') && typeof m.text === 'string')
-            .map((m) => `${m.role === 'ai' ? 'AI' : 'Farmer'}: ${m.text}`)
+            .map((m) => (m.role === 'ai' ? `You previously replied: ${m.text}` : `User previously said: ${m.text}`))
             .join('\n\n');
         }
       } catch (e) {
@@ -71,7 +71,7 @@ Weather data is not available (location was not shared). Give general guidance a
 
     const prompt = `You are Kisan-Dost AI, a highly expert agricultural assistant for Pakistani farmers. 
 The user's requested language setting is: ${language}.
-${language === 'Auto' ? 'Listen carefully to the audio. If the user speaks Punjabi, you MUST reply in pure Punjabi (using Shahmukhi/Urdu script). If they speak Sindhi, reply in Sindhi. If Urdu, reply in Urdu.' : `You MUST respond entirely in ${language}.`}
+${String(language).toLowerCase() === 'auto' ? 'Listen carefully to the audio. If the user speaks Punjabi, you MUST reply in pure Punjabi (using Shahmukhi/Urdu script). If they speak Sindhi, reply in Sindhi. If Urdu, reply in Urdu.' : `You MUST respond entirely in ${language}.`}
 
 ${weatherBlock}
 
@@ -79,6 +79,12 @@ PREVIOUS CONVERSATION HISTORY:
 ${historyText ? historyText : "(No previous conversation - this is a brand new consultation.)"}
 
 FOLLOW-UP INSTRUCTION: Use the above history as context for follow-up questions. If the farmer refers to something discussed earlier (for example: "Kal wali dawai kab spray karun?"), you MUST identify which medicine, disease, or advice was discussed and answer based on that context.
+
+CONVERSATIONAL MEMORY RULES (STRICT):
+1) Review the PREVIOUS CONVERSATION HISTORY above. If you already greeted the user earlier in the history, DO NOT greet them again (no repeated "Assalam-o-Alaikum" or self-introduction).
+2) If the user asks a short follow-up question or merely acknowledges you, give a CONCISE, TO-THE-POINT answer.
+3) DO NOT repeat the weather advice or the full prescription UNLESS the user specifically asks for it or it is directly relevant to their new question.
+4) Act like a human expert continuing a chat, not a robot repeating a template.
 
 KNOWLEDGE BASE (Official Guidelines):
 ${knowledgeBase ? knowledgeBase : "No additional guidelines provided."}
@@ -95,7 +101,7 @@ INSTRUCTIONS FOR EXPERT ADVICE:
 CRITICAL RULE: You MUST output a valid JSON object with exactly three keys:
 1. "urdu_text": The complete expert conversational advice in native script for the screen.
 2. "native_urdu": The exact same text for the Text-to-Speech engine.
-3. "prescription": A nested JSON object containing a structured summary for a printable ticket: 
+3. "prescription": A nested JSON object containing a structured summary for a printable ticket, OR null if a ticket is NOT needed for this reply (e.g., a short follow-up answer): 
    {
      "disease": "Name of disease", 
      "medicines": ["Medicine 1 (Dosage)", "Alternative: Medicine 2"], 

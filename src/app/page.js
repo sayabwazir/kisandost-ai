@@ -2,7 +2,7 @@
 import { useState, useRef, useEffect } from "react";
 import Image from "next/image";
 import { waitAudioBase64 } from "./waitAudio";
-import html2canvas from "html2canvas";
+import html2canvas from "html2canvas-pro";
 
 const HISTORY_KEY = "kisandost_chat_history";
 
@@ -13,13 +13,13 @@ export default function Home() {
   const [imageName, setImageName] = useState("");
   const [language, setLanguage] = useState("auto"); // auto, ur, pa, sd
   const [messages, setMessages] = useState([]);
+  const [isAudioPlaying, setIsAudioPlaying] = useState(false);
   
   const fileInputRef = useRef(null);
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
   const audioRef = useRef(null);
   const imageFileRef = useRef(null);
-  const ticketRef = useRef(null);
   const weatherPromiseRef = useRef(null);
   const [historyLoaded, setHistoryLoaded] = useState(false);
 
@@ -210,8 +210,54 @@ export default function Home() {
     }
   };
 
-  const downloadTicket = () => {
-    window.print();
+  const isMobileDevice = () =>
+    /Android|iPhone|iPad|iPod|Mobi/i.test(navigator.userAgent) ||
+    (navigator.maxTouchPoints > 0 && window.matchMedia("(pointer: coarse)").matches);
+
+  const downloadTicket = async (idx) => {
+    const card = document.getElementById(`ticket-${idx}`);
+    if (!card) return;
+    try {
+      const canvas = await html2canvas(card, {
+        scale: 2,
+        backgroundColor: "#fffbeb",
+        useCORS: true,
+        logging: false,
+      });
+      const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
+      if (!blob) throw new Error("Image could not be created");
+      const file = new File([blob], "kisan-dost-ticket.png", { type: "image/png" });
+
+      // Mobile with Web Share API: native share sheet (iOS/Android)
+      if (isMobileDevice() && typeof navigator.share === "function") {
+        try {
+          const canShareFiles = typeof navigator.canShare === "function"
+            ? navigator.canShare({ files: [file] })
+            : false;
+          if (canShareFiles) {
+            await navigator.share({ files: [file], title: "Kisan-Dost Ticket" });
+          } else {
+            await navigator.share({ title: "Kisan-Dost Ticket", text: "Kisan-Dost AI Nuskha" });
+          }
+          return;
+        } catch (err) {
+          if (err && err.name === "AbortError") return; // user closed the share sheet
+        }
+      }
+
+      // Desktop / fallback: automatic <a> download
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "kisan-dost-ticket.png";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+    } catch (e) {
+      console.error("Ticket export failed:", e);
+      alert("Ticket save nahi ho saka. Barah-e-meherbani dobara koshish karein.");
+    }
   };
 
   const startFresh = () => {
@@ -303,7 +349,14 @@ export default function Home() {
 
   return (
     <main className="flex flex-col min-h-screen bg-background font-sans relative">
-      <audio ref={audioRef} className="hidden" playsInline />
+      <audio
+        ref={audioRef}
+        className="hidden"
+        playsInline
+        onPlay={() => setIsAudioPlaying(true)}
+        onPause={() => setIsAudioPlaying(false)}
+        onEnded={() => setIsAudioPlaying(false)}
+      />
       
       {/* Header */}
       <header className="bg-gradient-to-r from-agri-green via-emerald-800 to-agri-green text-white p-5 shadow-lg flex justify-between items-center rounded-b-3xl relative overflow-hidden shrink-0">
@@ -315,6 +368,20 @@ export default function Home() {
           <h1 className="text-3xl font-extrabold tracking-wide bg-clip-text text-transparent bg-gradient-to-r from-white to-agri-light">Kisan-Dost AI</h1>
         </div>
       </header>
+
+      {/* Stop Voice Button (only while AI is speaking) */}
+      {isAudioPlaying && (
+        <button
+          type="button"
+          onClick={() => {
+            if (audioRef.current) audioRef.current.pause();
+          }}
+          className="fixed bottom-28 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 bg-red-600 hover:bg-red-700 text-white text-xl font-extrabold px-8 py-4 rounded-full shadow-2xl border-4 border-white animate-pulse"
+        >
+          <span className="text-2xl">🔇</span>
+          <span>Chup Karwayen (Stop Voice)</span>
+        </button>
+      )}
 
       {/* Main Content Area */}
       <section className="flex-1 flex flex-col items-center justify-center p-6 gap-8 overflow-y-auto">
@@ -458,7 +525,7 @@ export default function Home() {
                {/* Prescription Ticket for Download */}
                {msg.prescription && (
                  <>
-                   <div ref={ticketRef} className="printable-card bg-amber-50 rounded-lg p-5 mt-4 border-2 border-dashed border-amber-300 shadow-sm relative">
+                   <div id={`ticket-${idx}`} className="printable-card bg-amber-50 rounded-lg p-5 mt-4 border-2 border-dashed border-amber-300 shadow-sm relative">
                      <div className="absolute top-0 right-0 p-2 opacity-20">🌱</div>
                      <h2 className="text-center text-xl font-black text-amber-800 border-b-2 border-amber-200 pb-2 mb-3">
                        Kisan-Dost Ticket
@@ -485,13 +552,13 @@ export default function Home() {
                    </div>
                    
                    <button 
-                     onClick={downloadTicket}
+                     onClick={() => downloadTicket(idx)}
                      className="mt-3 w-full bg-agri-accent hover:bg-agri-green text-white font-bold py-3 rounded-xl shadow-md transition-colors flex items-center justify-center gap-2"
                    >
                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6">
                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
                      </svg>
-                     PDF / Image Download Karein
+                     Ticket Share / Download Karein
                    </button>
                  </>
                )}
