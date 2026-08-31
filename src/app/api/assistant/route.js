@@ -149,6 +149,9 @@ DO NOT wrap the response in markdown blocks like \`\`\`json. Just return the raw
       nativeUrdu = aiResponseText;
     }
     
+    // Strip markdown formatting symbols (*, _, #, ~) so TTS doesn't read them out loud
+    nativeUrdu = nativeUrdu.replace(/[*_#~]/g, '');
+    
     // Generate Universal Audio Chunks using Google Translate TTS
     let audioChunks = [];
     if (nativeUrdu) {

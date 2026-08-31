@@ -166,6 +166,14 @@ export default function Home() {
     if (mediaRecorderRef.current && isRecording) {
       mediaRecorderRef.current.onstop = () => {
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        
+        // Prevent accidental short clicks (empty audio) from sending a request
+        if (audioBlob.size < 10000) {
+          alert("Awaaz bohat choti thi ya record nahi hui. Barah-e-meherbani Mic daba kar theek se baat karein.");
+          setIsProcessing(false);
+          return;
+        }
+
         setMessages((prev) => [...prev, { role: 'user', text: 'Audio sawal (voice message)' }]);
         sendAudioToAPI(audioBlob);
       };
