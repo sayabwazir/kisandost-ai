@@ -36,13 +36,16 @@ export async function POST(req) {
       }
     }
 
-    if (!audioBlob) {
-      return NextResponse.json({ error: "Audio is required." }, { status: 400 });
+    if (!audioBlob && !imageBlob) {
+      return NextResponse.json({ error: "Audio or image is required." }, { status: 400 });
     }
 
-    // Convert Audio Blob to Base64
-    const audioBuffer = await audioBlob.arrayBuffer();
-    const audioBase64 = Buffer.from(audioBuffer).toString("base64");
+    // Convert Audio Blob to Base64 (only if a voice message was provided)
+    let audioBase64 = null;
+    if (audioBlob) {
+      const audioBuffer = await audioBlob.arrayBuffer();
+      audioBase64 = Buffer.from(audioBuffer).toString("base64");
+    }
 
     // RAG: Read Knowledge Base Files
     let knowledgeBase = "";
@@ -71,7 +74,11 @@ Weather data is not available (location was not shared). Give general guidance a
 
     const prompt = `You are Kisan-Dost AI, a highly expert agricultural assistant for Pakistani farmers. 
 The user's requested language setting is: ${language}.
-${String(language).toLowerCase() === 'auto' ? 'Listen carefully to the audio. If the user speaks Punjabi, you MUST reply in pure Punjabi (using Shahmukhi/Urdu script). If they speak Sindhi, reply in Sindhi. If Urdu, reply in Urdu.' : `You MUST respond entirely in ${language}.`}
+${String(language).toLowerCase() === 'auto'
+  ? (audioBlob
+      ? 'Listen carefully to the audio. If the user speaks Punjabi, you MUST reply in pure Punjabi (using Shahmukhi/Urdu script). If they speak Sindhi, reply in Sindhi. If Urdu, reply in Urdu.'
+      : 'No voice message was provided (photo only), so reply in simple Urdu (Nastaliq script).')
+  : `You MUST respond entirely in ${language}.`}
 
 ${weatherBlock}
 
@@ -85,6 +92,12 @@ CONVERSATIONAL MEMORY RULES (STRICT):
 2) If the user asks a short follow-up question or merely acknowledges you, give a CONCISE, TO-THE-POINT answer.
 3) DO NOT repeat the weather advice or the full prescription UNLESS the user specifically asks for it or it is directly relevant to their new question.
 4) Act like a human expert continuing a chat, not a robot repeating a template.
+
+EXTREME BREVITY RULE (HIGHEST PRIORITY):
+The user is an ILLITERATE farmer who will LISTEN to your answer, not read it. Keep your answer EXTREMELY SHORT, PUNCHY, and TO-THE-POINT. NO long paragraphs. NO filler. NO rambling. A few clear sentences maximum. Speak simply, like a wise friend giving quick advice in the field.
+
+IMAGE-ONLY DIAGNOSIS RULE:
+If the farmer uploaded a photo but did NOT give a voice question, INSTANTLY diagnose the crop disease visible in the photo. State the disease name and the one best medicine to use, immediately. Do NOT ask them to describe the problem.
 
 KNOWLEDGE BASE (Official Guidelines):
 ${knowledgeBase ? knowledgeBase : "No additional guidelines provided."}
@@ -109,15 +122,16 @@ CRITICAL RULE: You MUST output a valid JSON object with exactly three keys:
    }
 DO NOT wrap the response in markdown blocks like \`\`\`json. Just return the raw JSON object.`;
 
-    const contents = [
-      prompt,
-      {
+    const contents = [prompt];
+
+    if (audioBase64) {
+      contents.push({
         inlineData: {
           mimeType: audioBlob.type || "audio/webm",
           data: audioBase64
         }
-      }
-    ];
+      });
+    }
 
     if (imageBlob) {
       const imageBuffer = await imageBlob.arrayBuffer();

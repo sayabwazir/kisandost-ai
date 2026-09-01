@@ -62,10 +62,36 @@ export default function Home() {
   const handleImageChange = (e) => {
     const file = e.target.files[0];
     if (file) {
+      // Ignore extra selections while the AI is already busy
+      if (isProcessing || isRecording) return;
+
       imageFileRef.current = file;
       const imageUrl = URL.createObjectURL(file);
       setImagePreview(imageUrl);
       setImageName(file.name);
+
+      // Fire the weather lookup in parallel while the photo is analyzed
+      weatherPromiseRef.current = fetchWeatherContext();
+
+      // Instantly play the "aap ke maslay ko dekha ja raha hai" voice prompt
+      if (audioRef.current) {
+        // iOS Safari audio unlock (must happen inside the user gesture)
+        audioRef.current.volume = 1.0;
+        audioRef.current.play().catch(() => {});
+        audioRef.current.pause();
+        audioRef.current.src = `data:audio/mp3;base64,${waitAudioBase64}`;
+        audioRef.current.volume = 1.0;
+        audioRef.current.play().catch((err) => console.error("Auto-play prevented", err));
+      }
+
+      // Log the photo in the conversation so follow-ups keep the context
+      setMessages((prev) => [...prev, { role: 'user', text: 'Tasweer bheji gayi (photo)' }]);
+
+      // ONE-TAP: analyze the photo immediately, no mic press needed
+      sendAudioToAPI(null);
+
+      // Reset the input so the same photo can be selected again if needed
+      e.target.value = "";
     }
   };
 
@@ -278,11 +304,14 @@ export default function Home() {
     setIsProcessing(true);
     try {
       const formData = new FormData();
-      formData.append('audio', audioBlob, 'recording.webm');
+      if (audioBlob) {
+        formData.append('audio', audioBlob, 'recording.webm');
+      }
       formData.append('language', language);
       
       if (imageFileRef.current) {
         formData.append('image', imageFileRef.current);
+        imageFileRef.current = null; // attach the photo only once; follow-ups use chat memory
       }
 
       // Attach weather context if it resolved in time; never block the request on it
@@ -347,6 +376,12 @@ export default function Home() {
     }
   };
 
+  // Only the single newest message is shown on screen (to avoid scroll/clutter
+  // for an illiterate user), but the full `messages` array is kept intact for
+  // localStorage persistence and backend conversational memory.
+  const latestIdx = messages.length - 1;
+  const latestMsg = latestIdx >= 0 ? messages[latestIdx] : null;
+
   return (
     <main className="flex flex-col min-h-screen bg-background font-sans relative">
       <audio
@@ -389,10 +424,18 @@ export default function Home() {
         {/* Instruction Text */}
         <div className="text-center">
           <h2 className="text-2xl md:text-3xl font-bold text-agri-green mb-2">
-            {isProcessing ? "AI soch raha hai..." : isRecording ? "Sun raha hoon..." : "Apna Masla Batayen"}
+            {isProcessing
+              ? (imagePreview ? "AI tasweer check kar raha hai..." : "AI soch raha hai...")
+              : isRecording
+                ? "Sun raha hoon..."
+                : "Apna Masla Batayen"}
           </h2>
           <p className="text-gray-600 text-lg">
-            {isProcessing ? "Barah-e-meherbani intezar karein" : isRecording ? "Bolna khatam karne ke liye dobara dabayen" : "Neechay button daba kar apni zaban mein baat karein."}
+            {isProcessing
+              ? "Barah-e-meherbani intezar karein"
+              : isRecording
+                ? "Bolna khatam karne ke liye dobara dabayen"
+                : "Bol kar ya tasweer le kar apna masla batayen."}
           </p>
         </div>
 
@@ -484,34 +527,48 @@ export default function Home() {
         {/* Image Preview Area */}
         {imagePreview && (
           <div className="mt-4 flex flex-col items-center relative z-20 w-full px-4">
-            <p className="text-sm font-bold text-agri-green mb-2">Aap ki tasweer:</p>
+            <p className="text-sm font-bold text-agri-green mb-2">
+              {isProcessing ? "AI aap ki fasal check kar raha hai..." : "Aap ki tasweer:"}
+            </p>
             <div className="relative w-full max-w-[200px] aspect-square rounded-2xl overflow-hidden border-4 border-agri-accent shadow-md flex items-center justify-center bg-gray-200">
                <img src={imagePreview} alt="Crop Preview" className="object-cover w-full h-full" onError={(e) => e.target.style.display = 'none'} />
+
+               {/* Laser scan overlay while the AI analyzes the photo */}
+               {isProcessing && (
+                 <>
+                   <div className="absolute inset-0 bg-agri-green/10 pointer-events-none"></div>
+                   <div className="scan-laser absolute left-0 right-0 h-1 bg-gradient-to-r from-transparent via-lime-400 to-transparent shadow-[0_0_16px_4px_rgba(163,230,53,0.9)] pointer-events-none"></div>
+                   <div className="absolute inset-0 pointer-events-none border-2 border-lime-300/60 rounded-2xl animate-pulse"></div>
+                 </>
+               )}
+
                <span className="absolute text-xs text-gray-500 text-center px-2">{imageName}</span>
             </div>
-            <button 
-              type="button"
-              onClick={() => {
-                setImagePreview(null);
-                setImageName("");
-                imageFileRef.current = null;
-                if(fileInputRef.current) fileInputRef.current.value = "";
-              }}
-              className="mt-4 px-6 py-2 bg-red-100 text-red-600 rounded-full text-sm font-bold shadow-sm"
-            >
-              Tasweer Hataen (Cancel)
-            </button>
+            {!isProcessing && (
+              <button 
+                type="button"
+                onClick={() => {
+                  setImagePreview(null);
+                  setImageName("");
+                  imageFileRef.current = null;
+                  if(fileInputRef.current) fileInputRef.current.value = "";
+                }}
+                className="mt-4 px-6 py-2 bg-red-100 text-red-600 rounded-full text-sm font-bold shadow-sm"
+              >
+                Tasweer Hataen (Cancel)
+              </button>
+            )}
           </div>
         )}
 
-        {/* Nuskha Ticket / Answers */}
+        {/* Nuskha Ticket / Answers — only the SINGLE LATEST message is rendered */}
         <div className="w-full max-w-sm px-2 pb-6 flex flex-col items-center">
-          {messages.map((msg, idx) => (
-             <div key={idx} className="w-full">
-               {msg.role === 'user' ? (
+          {latestMsg && (
+             <div className="w-full">
+               {latestMsg.role === 'user' ? (
                  <div className="flex justify-end mt-4">
                    <div className="bg-agri-green text-white rounded-2xl rounded-br-sm shadow-md p-3 max-w-[85%] text-sm font-medium">
-                     🎤 {msg.text}
+                     🎤 {latestMsg.text}
                    </div>
                  </div>
                ) : (
@@ -519,40 +576,40 @@ export default function Home() {
                {/* AI Text Response */}
                <div className="bg-white rounded-xl shadow-md p-4 mt-4 border border-agri-green/20">
                  <h3 className="text-agri-green font-bold text-lg mb-2">AI Nuskha:</h3>
-                 <p className="text-gray-700 whitespace-pre-wrap">{msg.text}</p>
+                 <p className="text-gray-700 whitespace-pre-wrap">{latestMsg.text}</p>
                </div>
                
                {/* Prescription Ticket for Download */}
-               {msg.prescription && (
+               {latestMsg.prescription && (
                  <>
-                   <div id={`ticket-${idx}`} className="printable-card bg-amber-50 rounded-lg p-5 mt-4 border-2 border-dashed border-amber-300 shadow-sm relative">
+                   <div id={`ticket-${latestIdx}`} className="printable-card bg-amber-50 rounded-lg p-5 mt-4 border-2 border-dashed border-amber-300 shadow-sm relative">
                      <div className="absolute top-0 right-0 p-2 opacity-20">🌱</div>
                      <h2 className="text-center text-xl font-black text-amber-800 border-b-2 border-amber-200 pb-2 mb-3">
                        Kisan-Dost Ticket
                      </h2>
-                     <p className="font-bold text-lg text-red-600 mb-2">Bemari: <span className="font-normal text-black">{msg.prescription.disease}</span></p>
+                     <p className="font-bold text-lg text-red-600 mb-2">Bemari: <span className="font-normal text-black">{latestMsg.prescription.disease}</span></p>
                      
-                     {msg.prescription.medicines && msg.prescription.medicines.length > 0 && (
+                     {latestMsg.prescription.medicines && latestMsg.prescription.medicines.length > 0 && (
                        <div className="mb-3">
                          <p className="font-bold text-emerald-800 border-b border-emerald-100 mb-1">Adwiyaat (Medicines):</p>
                          <ul className="list-disc pl-5 text-gray-800">
-                           {msg.prescription.medicines.map((med, i) => <li key={i}>{med}</li>)}
+                           {latestMsg.prescription.medicines.map((med, i) => <li key={i}>{med}</li>)}
                          </ul>
                        </div>
                      )}
                      
-                     {msg.prescription.steps && msg.prescription.steps.length > 0 && (
+                     {latestMsg.prescription.steps && latestMsg.prescription.steps.length > 0 && (
                        <div>
                          <p className="font-bold text-blue-800 border-b border-blue-100 mb-1">Hidayat (Instructions):</p>
                          <ul className="list-disc pl-5 text-gray-800">
-                           {msg.prescription.steps.map((step, i) => <li key={i}>{step}</li>)}
+                           {latestMsg.prescription.steps.map((step, i) => <li key={i}>{step}</li>)}
                          </ul>
                        </div>
                      )}
                    </div>
                    
                    <button 
-                     onClick={() => downloadTicket(idx)}
+                     onClick={() => downloadTicket(latestIdx)}
                      className="mt-3 w-full bg-agri-accent hover:bg-agri-green text-white font-bold py-3 rounded-xl shadow-md transition-colors flex items-center justify-center gap-2"
                    >
                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6">
@@ -565,7 +622,7 @@ export default function Home() {
                </>
                )}
              </div>
-          ))}
+          )}
         </div>
 
       </section>

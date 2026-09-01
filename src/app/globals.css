@@ -18,6 +18,24 @@
   --font-mono: var(--font-geist-mono);
 }
 
+/* Laser-scan animation shown over the crop photo while the AI analyzes it */
+.scan-laser {
+  top: 0;
+  animation: scan-sweep 1.6s ease-in-out infinite;
+}
+
+@keyframes scan-sweep {
+  0% {
+    top: 0%;
+  }
+  50% {
+    top: calc(100% - 4px);
+  }
+  100% {
+    top: 0%;
+  }
+}
+
 @media (prefers-color-scheme: dark) {
   :root {
     --background: #081c15; /* Very dark green for dark mode */
