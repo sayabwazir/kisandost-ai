@@ -14,6 +14,7 @@ export default function Home() {
   const [language, setLanguage] = useState("auto"); // auto, ur, pa, sd
   const [messages, setMessages] = useState([]);
   const [isAudioPlaying, setIsAudioPlaying] = useState(false);
+  const [isGeneratingTicket, setIsGeneratingTicket] = useState(false);
   
   const fileInputRef = useRef(null);
   const mediaRecorderRef = useRef(null);
@@ -52,8 +53,20 @@ export default function Home() {
     }
   }, [messages, historyLoaded]);
 
+  // iOS Safari: the audio element must be "unlocked" (played + paused) during a
+  // direct tap/click. Otherwise a later .play() fired from an <input> onChange
+  // (image upload) is blocked. Unlock here so the waiting voice plays on iOS.
+  const unlockAudioForIOS = () => {
+    if (audioRef.current) {
+      audioRef.current.volume = 1.0;
+      audioRef.current.play().catch(() => {});
+      audioRef.current.pause();
+    }
+  };
+
   // --- CAMERA LOGIC ---
   const handleCameraClick = () => {
+    unlockAudioForIOS();
     if (fileInputRef.current) {
       fileInputRef.current.click();
     }
@@ -74,11 +87,8 @@ export default function Home() {
       weatherPromiseRef.current = fetchWeatherContext();
 
       // Instantly play the "aap ke maslay ko dekha ja raha hai" voice prompt
+      unlockAudioForIOS(); // re-unlock for safety, then play the waiting voice
       if (audioRef.current) {
-        // iOS Safari audio unlock (must happen inside the user gesture)
-        audioRef.current.volume = 1.0;
-        audioRef.current.play().catch(() => {});
-        audioRef.current.pause();
         audioRef.current.src = `data:audio/mp3;base64,${waitAudioBase64}`;
         audioRef.current.volume = 1.0;
         audioRef.current.play().catch((err) => console.error("Auto-play prevented", err));
@@ -243,6 +253,9 @@ export default function Home() {
   const downloadTicket = async (idx) => {
     const card = document.getElementById(`ticket-${idx}`);
     if (!card) return;
+    // Guard against spam-clicks while the ticket image is already being built
+    if (isGeneratingTicket) return;
+    setIsGeneratingTicket(true);
     try {
       const canvas = await html2canvas(card, {
         scale: 2,
@@ -283,6 +296,8 @@ export default function Home() {
     } catch (e) {
       console.error("Ticket export failed:", e);
       alert("Ticket save nahi ho saka. Barah-e-meherbani dobara koshish karein.");
+    } finally {
+      setIsGeneratingTicket(false);
     }
   };
 
@@ -501,7 +516,10 @@ export default function Home() {
             
             <button 
               type="button"
-              onClick={() => document.getElementById('galleryInput').click()}
+              onClick={() => {
+                unlockAudioForIOS();
+                document.getElementById('galleryInput').click();
+              }}
               disabled={isProcessing || isRecording}
               className="flex-1 flex flex-col items-center justify-center gap-2 bg-white border-2 border-emerald-600 text-emerald-700 hover:bg-emerald-50 rounded-2xl p-3 shadow-sm transition-transform transform active:scale-95 disabled:opacity-50"
             >
@@ -610,12 +628,26 @@ export default function Home() {
                    
                    <button 
                      onClick={() => downloadTicket(latestIdx)}
-                     className="mt-3 w-full bg-agri-accent hover:bg-agri-green text-white font-bold py-3 rounded-xl shadow-md transition-colors flex items-center justify-center gap-2"
+                     disabled={isGeneratingTicket}
+                     className={`mt-3 w-full text-white font-bold py-3 rounded-xl shadow-md transition-colors flex items-center justify-center gap-2
+                       ${isGeneratingTicket ? 'bg-gray-400 cursor-not-allowed opacity-70' : 'bg-agri-accent hover:bg-agri-green'}`}
                    >
-                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6">
-                       <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
-                     </svg>
-                     Ticket Share / Download Karein
+                     {isGeneratingTicket ? (
+                       <>
+                         <svg className="w-6 h-6 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                           <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                           <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+                         </svg>
+                         ⏳ Ticket ban raha hai...
+                       </>
+                     ) : (
+                       <>
+                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6">
+                           <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                         </svg>
+                         Ticket Share / Download Karein
+                       </>
+                     )}
                    </button>
                  </>
                )}
