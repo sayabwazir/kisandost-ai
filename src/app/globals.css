@@ -36,6 +36,13 @@
   }
 }
 
+/* iOS Safari: kill the 300ms tap delay / double-tap-to-zoom on every button,
+   and restore cursor:pointer (Tailwind v4 preflight defaults to cursor:default) */
+button {
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
 @media (prefers-color-scheme: dark) {
   :root {
     --background: #081c15; /* Very dark green for dark mode */

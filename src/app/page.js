@@ -461,8 +461,8 @@ export default function Home() {
             type="button"
             onClick={handleMicClick}
             disabled={isProcessing}
-            className={`w-full flex flex-col items-center justify-center gap-3 rounded-3xl p-8 shadow-[0_10px_20px_rgba(0,0,0,0.2)] transition-all duration-300 transform active:scale-90
-              ${isProcessing ? 'opacity-50 cursor-not-allowed' : ''}
+            className={`w-full flex flex-col items-center justify-center gap-3 rounded-3xl p-8 shadow-[0_10px_20px_rgba(0,0,0,0.2)] transition-all duration-300 transform active:scale-90 touch-manipulation
+              ${isProcessing ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
               ${isRecording 
                 ? 'bg-red-600 border-4 border-red-800 animate-pulse shadow-red-500/50' 
                 : 'bg-gradient-to-b from-agri-green to-emerald-900 border-2 border-emerald-600'
@@ -629,8 +629,8 @@ export default function Home() {
                    <button 
                      onClick={() => downloadTicket(latestIdx)}
                      disabled={isGeneratingTicket}
-                     className={`mt-3 w-full text-white font-bold py-3 rounded-xl shadow-md transition-colors flex items-center justify-center gap-2
-                       ${isGeneratingTicket ? 'bg-gray-400 cursor-not-allowed opacity-70' : 'bg-agri-accent hover:bg-agri-green'}`}
+                     className={`mt-3 w-full text-white font-bold py-3 rounded-xl shadow-md transition-colors flex items-center justify-center gap-2 touch-manipulation
+                       ${isGeneratingTicket ? 'bg-gray-400 cursor-not-allowed opacity-70' : 'bg-agri-accent hover:bg-agri-green cursor-pointer'}`}
                    >
                      {isGeneratingTicket ? (
                        <>
