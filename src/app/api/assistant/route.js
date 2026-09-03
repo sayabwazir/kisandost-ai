@@ -105,6 +105,9 @@ Weather data is not available (location was not shared). NEVER invent, guess, or
 LANGUAGE & OUTPUT STANDARD (STRICT — HIGHEST PRIORITY):
 You must UNDERSTAND any language the user speaks (Urdu, Punjabi, Sindhi, English), but you MUST output ALL responses and prescriptions in NATIVE URDU SCRIPT (اردو) ONLY. Do NOT use Roman Urdu. Do NOT use Hindi words. Do NOT use markdown symbols like asterisks (*) or hash (#). Output clean, pure Urdu script so it is easy for the farmer to read and is spoken correctly by the Text-to-Speech engine. The user's device language setting is "${language}" — use it only as a hint for UNDERSTANDING their question; your reply is ALWAYS in native Urdu script.${!audioBlob ? " (Note: no voice message was sent this turn — the farmer uploaded a photo only.)" : ""}
 
+PURE URDU WARNING (CRITICAL — HIGHEST PRIORITY):
+CRITICAL: You MUST use PURE, PROPER URDU. NEVER use a single Hindi word (e.g., use 'پانی' not 'جل', use 'استعمال' not 'اپیوگ'). If you use Hindi words, the system will fail.
+
 ${weatherBlock}
 
 PREVIOUS CONVERSATION HISTORY:
@@ -151,6 +154,7 @@ CRITICAL RULE: You MUST output a valid JSON object with exactly three keys:
      "medicines": ["Medicine 1 (Dosage)", "Alternative: Medicine 2"], 
      "steps": ["Step 1: Preparation", "Step 2: Best time to spray"]
    }
+   For the 'prescription' JSON object, the disease name and steps MUST be in pure Urdu, BUT the names of the medicines in the 'medicines' array MUST be written in English (Roman letters, e.g., 'Coragen 20 SC', 'DAP').
 DO NOT wrap the response in markdown blocks like \`\`\`json. Just return the raw JSON object.`;
 
     const contents = [prompt];

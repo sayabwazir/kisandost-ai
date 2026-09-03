@@ -16,6 +16,7 @@ export default function Home() {
   const [isAudioPlaying, setIsAudioPlaying] = useState(false);
   const [isGeneratingTicket, setIsGeneratingTicket] = useState(false);
   const [ticketReady, setTicketReady] = useState(false);
+  const [locationDenied, setLocationDenied] = useState(false);
   
   const fileInputRef = useRef(null);
   const mediaRecorderRef = useRef(null);
@@ -54,6 +55,14 @@ export default function Home() {
       console.warn("Could not save chat history:", e);
     }
   }, [messages, historyLoaded]);
+
+  // Trigger the native location permission prompt as soon as the app loads,
+  // instead of waiting for the first mic/camera tap.
+  useEffect(() => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(() => {}, () => {});
+    }
+  }, []);
 
   // iOS Safari: the audio element must be "unlocked" (played + paused) during a
   // direct tap/click. Otherwise a later .play() fired from an <input> onChange
@@ -149,6 +158,10 @@ export default function Home() {
           },
           (err) => {
             console.warn("Geolocation unavailable, proceeding without weather:", err.message);
+            if (err.code === 1) {
+              // PERMISSION_DENIED — tell the user how to fix it
+              setLocationDenied(true);
+            }
             resolve(null);
           },
           { timeout: 8000, maximumAge: 600000 }
@@ -225,12 +238,16 @@ export default function Home() {
       
       setIsRecording(false);
       
-      // Play high-quality pre-generated Urdu voice prompt for waiting
-      if (audioRef.current) {
-        audioRef.current.src = `data:audio/mp3;base64,${waitAudioBase64}`;
-        audioRef.current.volume = 1.0;
-        audioRef.current.play().catch(e => console.error("Auto-play prevented", e));
-      }
+      // iOS: after the mic tracks stop, the audio session needs ~300ms to switch
+      // back from "voicechat" mode to "playback" mode. Playing instantly yields
+      // low volume on iPhone, so delay the wait prompt slightly.
+      setTimeout(() => {
+        if (audioRef.current) {
+          audioRef.current.src = `data:audio/mp3;base64,${waitAudioBase64}`;
+          audioRef.current.volume = 1.0;
+          audioRef.current.play().catch(e => console.error("Auto-play prevented", e));
+        }
+      }, 300);
     }
   };
 
@@ -252,6 +269,8 @@ export default function Home() {
   const isMobileDevice = () =>
     /Android|iPhone|iPad|iPod|Mobi/i.test(navigator.userAgent) ||
     (navigator.maxTouchPoints > 0 && window.matchMedia("(pointer: coarse)").matches);
+
+  const isIOSDevice = () => /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 
   // PHASE 1 (tap 1): render the ticket to a PNG blob and store it.
   // iOS Safari kills the user-gesture chain if navigator.share() is called
@@ -315,6 +334,56 @@ export default function Home() {
     // Reset for next time
     ticketBlobRef.current = null;
     setTicketReady(false);
+  };
+
+  // Android/Desktop: prepare AND share/download in ONE tap. These platforms
+  // do not enforce iOS Safari's strict user-gesture chain, so no second tap.
+  const oneClickDownload = async (idx) => {
+    const card = document.getElementById(`ticket-${idx}`);
+    if (!card || isGeneratingTicket) return;
+    setIsGeneratingTicket(true);
+    try {
+      const canvas = await html2canvas(card, {
+        scale: 2,
+        backgroundColor: "#fffbeb",
+        useCORS: true,
+        logging: false,
+      });
+      const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
+      if (!blob) throw new Error("Image could not be created");
+      const file = new File([blob], "kisan-dost-ticket.png", { type: "image/png" });
+
+      if (isMobileDevice() && typeof navigator.share === "function") {
+        try {
+          const canShareFiles = typeof navigator.canShare === "function"
+            ? navigator.canShare({ files: [file] })
+            : false;
+          if (canShareFiles) {
+            await navigator.share({ files: [file], title: "Kisan-Dost Ticket" });
+          } else {
+            await navigator.share({ title: "Kisan-Dost Ticket", text: "Kisan-Dost AI Nuskha" });
+          }
+        } catch (err) {
+          if (err && err.name === "AbortError") {
+            // user closed the share sheet, do nothing
+          }
+        }
+      } else {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "kisan-dost-ticket.png";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 5000);
+      }
+    } catch (e) {
+      console.error("Ticket export failed:", e);
+      alert("Ticket ban nahi saka. Dobara koshish karein.");
+    } finally {
+      setIsGeneratingTicket(false);
+    }
   };
 
   const startFresh = () => {
@@ -452,6 +521,29 @@ export default function Home() {
           <h1 className="text-3xl font-extrabold tracking-wide bg-clip-text text-transparent bg-gradient-to-r from-white to-agri-light">Kisan-Dost AI</h1>
         </div>
       </header>
+
+      {locationDenied && (
+        <div className="bg-amber-50 border-b border-amber-200 px-4 py-3 flex items-start gap-2 shrink-0">
+          <div className="flex-1">
+            <p dir="rtl" className="text-sm font-bold text-amber-800 text-right">
+              📍 لوکیشن کی اجازت نہیں ملی۔ موسم کی معلومات کے لیے براہ مہربانی اپنے براؤزر/آئی فون کی سیٹنگز میں جا کر لوکیشن کی اجازت (Allow) دیں۔
+            </p>
+            <p dir="ltr" className="text-xs font-bold text-amber-700 mt-1 text-left">
+              iPhone: Settings {'>'} Privacy {'>'} Location Services {'>'} Safari Websites {'>'} Allow
+            </p>
+            <p dir="ltr" className="text-xs font-bold text-amber-700 mt-0.5 text-left">
+              Android: Settings {'>'} Apps {'>'} Chrome/Browser {'>'} Permissions {'>'} Location {'>'} Allow
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setLocationDenied(false)}
+            className="text-amber-400 hover:text-amber-600 text-lg font-bold px-1"
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
       {/* Stop Voice Button (only while AI is speaking) */}
       {isAudioPlaying && (
@@ -661,7 +753,17 @@ export default function Home() {
                    </div>
                    
                    <button 
-                     onClick={() => (ticketReady ? shareOrDownloadTicket() : prepareTicket(latestIdx))}
+                     onClick={() => {
+                       if (isIOSDevice()) {
+                         if (ticketReady) {
+                           shareOrDownloadTicket();
+                         } else {
+                           prepareTicket(latestIdx);
+                         }
+                       } else {
+                         oneClickDownload(latestIdx);
+                       }
+                     }}
                      disabled={isGeneratingTicket}
                      className={`mt-3 w-full text-white font-bold py-3 rounded-xl shadow-md transition-colors flex items-center justify-center gap-2 touch-manipulation
                        ${isGeneratingTicket
@@ -678,19 +780,26 @@ export default function Home() {
                          </svg>
                          ⏳ Ticket ban raha hai...
                        </>
-                     ) : ticketReady ? (
+                     ) : isIOSDevice() && ticketReady ? (
                        <>
                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6">
                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 8.25H7.5a2.25 2.25 0 00-2.25 2.25v9a2.25 2.25 0 002.25 2.25h9a2.25 2.25 0 002.25-2.25v-9a2.25 2.25 0 00-2.25-2.25H15m0-3l-3-3m0 0l-3 3m3-3V15" />
                          </svg>
                          📤 Share / Download Karein
                        </>
-                     ) : (
+                     ) : isIOSDevice() ? (
                        <>
                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6">
                            <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
                          </svg>
                          📋 Ticket Tayyar Karein
+                       </>
+                     ) : (
+                       <>
+                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6">
+                           <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                         </svg>
+                         📥 Share / Download Karein
                        </>
                      )}
                    </button>
