@@ -836,6 +836,17 @@ export default function Home() {
           <button onClick={() => setLanguage("pa")} className={`px-4 py-2 text-sm rounded-full font-bold shadow-sm transition border ${language === 'pa' ? 'bg-agri-green text-white border-agri-green' : 'bg-gray-50 text-gray-700 hover:bg-gray-100 border-gray-200'}`}>🌾 Punjabi</button>
           <button onClick={() => setLanguage("sd")} className={`px-4 py-2 text-sm rounded-full font-bold shadow-sm transition border ${language === 'sd' ? 'bg-agri-green text-white border-agri-green' : 'bg-gray-50 text-gray-700 hover:bg-gray-100 border-gray-200'}`}>🐪 Sindhi</button>
         </div>
+        <p className="text-center text-[11px] text-gray-400 mt-1 pb-1">
+          Developed by{' '}
+          <a
+            href="https://www.linkedin.com/in/sayab-wazir-653343431"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-semibold text-gray-500 hover:text-agri-green transition-colors touch-manipulation"
+          >
+            Sayab Wazir
+          </a>
+        </p>
       </footer>
     </main>
   );
