@@ -842,10 +842,12 @@ export default function Home() {
             href="https://www.linkedin.com/in/sayab-wazir-653343431"
             target="_blank"
             rel="noopener noreferrer"
-            className="font-semibold text-gray-500 hover:text-agri-green transition-colors touch-manipulation"
+            className="font-semibold text-gray-600 underline decoration-agri-green decoration-1 underline-offset-2 hover:text-agri-green transition-colors touch-manipulation"
           >
             Sayab Wazir
           </a>
+          <span className="mx-1.5 text-gray-300">|</span>
+          © 2026 All Rights Reserved.
         </p>
       </footer>
     </main>
