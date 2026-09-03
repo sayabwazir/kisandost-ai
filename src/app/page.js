@@ -203,9 +203,10 @@ export default function Home() {
       mediaRecorderRef.current.onstop = () => {
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
         
-        // Prevent accidental short clicks (empty audio) from sending a request
-        if (audioBlob.size < 10000) {
-          alert("Awaaz bohat choti thi ya record nahi hui. Barah-e-meherbani Mic daba kar theek se baat karein.");
+        // Reject only truly empty recordings; a quick word like "Hello"
+        // is normally well above 2000 bytes and must NOT be blocked.
+        if (audioBlob.size < 2000) {
+          alert("Awaaz record nahi hui. Barah-e-meherbani Mic daba kar baat karein.");
           setIsProcessing(false);
           return;
         }
@@ -383,9 +384,22 @@ export default function Home() {
         if (data.response) {
           setMessages((prev) => [...prev, { role: 'ai', text: data.response, prescription: data.prescription }]);
         }
+      } else {
+        // Server problem: ALWAYS show something so the app never looks hung
+        console.error("API returned non-OK status:", response.status);
+        setMessages((prev) => [...prev, {
+          role: 'ai',
+          text: "معاف کیجیے، سرور میں مسئلہ ہے۔ براہ مہربانی دوبارہ کوشش کریں۔",
+          prescription: null,
+        }]);
       }
     } catch (error) {
       console.error("API Error:", error);
+      setMessages((prev) => [...prev, {
+        role: 'ai',
+        text: "معاف کیجیے، سرور سے رابطہ نہیں ہو سکا۔ براہ مہربانی دوبارہ کوشش کریں۔",
+        prescription: null,
+      }]);
     } finally {
       setIsProcessing(false);
     }
@@ -654,6 +668,20 @@ export default function Home() {
                </>
                )}
              </div>
+          )}
+
+          {/* Typing indicator: temporary AI bubble with bouncing dots while processing */}
+          {isProcessing && (
+            <div className="flex justify-start mt-4 w-full" data-testid="processing-bubble">
+              <div className="bg-white border border-agri-green/20 rounded-2xl rounded-bl-sm shadow-md px-4 py-3 flex items-center gap-3 max-w-[85%]">
+                <div className="typing-dots flex items-center gap-1.5">
+                  <span className="typing-dot"></span>
+                  <span className="typing-dot"></span>
+                  <span className="typing-dot"></span>
+                </div>
+                <span className="text-agri-green font-bold text-lg">AI Soch raha hai...</span>
+              </div>
+            </div>
           )}
         </div>
 

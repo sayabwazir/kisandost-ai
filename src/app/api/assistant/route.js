@@ -4,6 +4,32 @@ import * as googleTTS from 'google-tts-api';
 import fs from "fs";
 import path from "path";
 
+const FALLBACK_TEXT = "معاف کیجیے، سرور میں مسئلہ ہے۔ براہ مہربانی دوبارہ کوشش کریں۔";
+
+// ALWAYS returns 200 OK so the frontend can show (and speak) the fallback
+// instead of hanging silently on a server error.
+async function buildFallbackResponse() {
+  let audioChunks = [];
+  try {
+    const results = await googleTTS.getAllAudioBase64(FALLBACK_TEXT, {
+      lang: 'ur',
+      slow: false,
+      host: 'https://translate.google.com',
+      splitPunct: ',.?'
+    });
+    audioChunks = results.map((r) => r.base64);
+  } catch (err) {
+    console.error("Fallback TTS error:", err);
+  }
+  return NextResponse.json({
+    success: false,
+    transcription: "",
+    response: FALLBACK_TEXT,
+    audioChunks: audioChunks,
+    prescription: null
+  });
+}
+
 export async function POST(req) {
   try {
     if (!process.env.GEMINI_API_KEY) {
@@ -36,13 +62,15 @@ export async function POST(req) {
       }
     }
 
-    if (!audioBlob && !imageBlob) {
+    const hasAudio = Boolean(audioBlob) && audioBlob.size > 0;
+    if (!hasAudio && !imageBlob) {
       return NextResponse.json({ error: "Audio or image is required." }, { status: 400 });
     }
 
-    // Convert Audio Blob to Base64 (only if a voice message was provided)
+    // Convert Audio Blob to Base64 (only if a non-empty voice message was provided;
+    // an image-only turn must NOT break here)
     let audioBase64 = null;
-    if (audioBlob) {
+    if (hasAudio) {
       const audioBuffer = await audioBlob.arrayBuffer();
       audioBase64 = Buffer.from(audioBuffer).toString("base64");
     }
@@ -70,12 +98,12 @@ ${weather}
 
 CONDITIONAL WEATHER INSTRUCTION: Use this weather data ONLY if the farmer is asking about a disease/spray for the FIRST time, or if the weather is directly relevant to their question. In that case, strictly advise whether today's conditions (wind, heat, rain) are safe for spraying. Otherwise, do NOT mention the weather at all.`
       : `CURRENT WEATHER AT THE FARMER'S LOCATION:
-Weather data is not available (location was not shared). NEVER invent, guess, or hallucinate any weather conditions. If — and only if — spraying advice is directly relevant to their question, give general guidance only (e.g., "subah sawere ya shaam ko spray karein").`;
+Weather data is not available (location was not shared). NEVER invent, guess, or hallucinate any weather conditions. If — and only if — spraying advice is directly relevant to their question, give general guidance only (e.g., "صبح سویرے یا شام کے وقت سپرے کریں").`;
 
     const prompt = `You are Kisan-Dost AI, a highly expert agricultural assistant for Pakistani farmers. 
 
 LANGUAGE & OUTPUT STANDARD (STRICT — HIGHEST PRIORITY):
-You must UNDERSTAND any language the user speaks (Urdu, Punjabi, Sindhi, English), but you MUST ALWAYS reply and generate the JSON prescription ONLY in Pure Pakistani Urdu written in Roman script (example: "Aap ki fasal mein leaf spot hai, Neem oil 5ml per liter spray karein"). NEVER use Hindi terminology. NEVER use emojis. NEVER use markdown like ** or _. Your response must be clean text so it can be read clearly by the Text-to-Speech engine. The user's device language setting is "${language}" — use it only as a hint for UNDERSTANDING their question; your reply language is ALWAYS Pure Pakistani Urdu in Roman script.${!audioBlob ? " (Note: no voice message was sent this turn — the farmer uploaded a photo only.)" : ""}
+You must UNDERSTAND any language the user speaks (Urdu, Punjabi, Sindhi, English), but you MUST output ALL responses and prescriptions in NATIVE URDU SCRIPT (اردو) ONLY. Do NOT use Roman Urdu. Do NOT use Hindi words. Do NOT use markdown symbols like asterisks (*) or hash (#). Output clean, pure Urdu script so it is easy for the farmer to read and is spoken correctly by the Text-to-Speech engine. The user's device language setting is "${language}" — use it only as a hint for UNDERSTANDING their question; your reply is ALWAYS in native Urdu script.${!audioBlob ? " (Note: no voice message was sent this turn — the farmer uploaded a photo only.)" : ""}
 
 ${weatherBlock}
 
@@ -97,10 +125,10 @@ IMAGE-ONLY DIAGNOSIS RULE:
 If the farmer uploaded a photo but did NOT give a voice question, INSTANTLY diagnose the crop disease visible in the photo. State the disease name and the one best medicine to use, immediately. Do NOT ask them to describe the problem.
 
 SITUATIONAL LOGIC RULES (STRICT):
-1) EVALUATE INPUT FIRST: Check the input. If the user's audio is empty, silent, or incomprehensible, DO NOT guess or hallucinate. Reply strictly: "Aap ki awaz theek se nahi aayi, barah-e-meherbani dobara batayen." and stop — add no weather, no advice, and set "prescription" to null.
-2) TO-THE-POINT ANSWERS: If the user asks a specific question, give a direct, to-the-point answer. No rambling, no unnecessary paragraphs.
-3) CONDITIONAL WEATHER: ONLY provide weather/spray recommendations if the user is asking about a disease/spray for the FIRST time, or if the weather is directly relevant to their question. Do NOT blindly repeat weather text on every message.
-4) Behave like a sharp, practical human expert who only speaks what is strictly necessary based on the exact current input.
+1) SILENCE CHECK FIRST (takes precedence over EVERY other rule): Listen to the audio. If it contains NO meaningful words at all (silent, empty, or only background noise), do NOT greet, do NOT guess, do NOT give any advice. Reply EXACTLY and ONLY with: "آپ کی آواز نہیں آئی، براہ مہربانی دوبارہ بتائیں۔" and set "prescription" to null.
+2) GREETINGS: If the user says "Hello", "Salam", or greets you (actual words are present), just greet them back politely in ONE sentence (e.g., "السلام علیکم! میں کسان دوست ہوں، اپنا مسئلہ بتائیں۔"). Do NOT hallucinate a crop disease. Do NOT give farming or weather advice on a greeting.
+3) CONDITIONAL WEATHER: Do NOT give weather advice unless the user specifically mentions a crop, a disease, or spraying. NEVER loop or repeat weather text across messages.
+4) TO-THE-POINT: Answer exactly what was asked, in a few short sentences, like a sharp practical human expert. Be extremely to-the-point. No rambling.
 
 KNOWLEDGE BASE (Official Guidelines):
 ${knowledgeBase ? knowledgeBase : "No additional guidelines provided."}
@@ -112,10 +140,10 @@ INSTRUCTIONS FOR EXPERT ADVICE:
    - EXACT Time of Application (e.g., "Spray only in the early morning or late evening to avoid heat").
    - ALTERNATIVES: Always provide alternative medicines in case the primary one is unavailable in the market.
 3. AT THE END of your advice, add a professional disclaimer in the response language saying to consult a local agriculture expert for extra precaution.
-4. ALWAYS write your response in Pure Pakistani Urdu in ROMAN script. NEVER use Nastaliq/Urdu script, NEVER use Hindi words, NEVER use emojis, and NEVER use markdown symbols (**, _, #, ~).
+4. ALWAYS write your response in NATIVE URDU SCRIPT (اردو). NEVER use Roman Urdu, NEVER use Hindi words, NEVER use emojis, and NEVER use markdown symbols (*, #, _, ~).
 
 CRITICAL RULE: You MUST output a valid JSON object with exactly three keys:
-1. "urdu_text": The complete expert advice in Roman-script Pakistani Urdu for the screen.
+1. "urdu_text": The complete expert advice in NATIVE URDU SCRIPT (اردو) for the screen.
 2. "native_urdu": The exact same text for the Text-to-Speech engine.
 3. "prescription": A nested JSON object containing a structured summary for a printable ticket, OR null if a ticket is NOT needed for this reply (e.g., a short follow-up answer): 
    {
@@ -148,12 +176,19 @@ DO NOT wrap the response in markdown blocks like \`\`\`json. Just return the raw
     }
 
     console.log("Sending multimodal request to Gemini 3.5 Flash Lite...");
-    
-    // Use the model that has 15 RPM limit in the user's screenshot
-    const model = genAI.getGenerativeModel({ model: "gemini-3.5-flash-lite" });
-    const result = await model.generateContent(contents);
-    
-    let aiResponseText = result.response.text();
+
+    let aiResponseText;
+    try {
+      // Use the model that has 15 RPM limit in the user's screenshot
+      const model = genAI.getGenerativeModel({ model: "gemini-3.5-flash-lite" });
+      const result = await model.generateContent(contents);
+      aiResponseText = result.response.text();
+    } catch (geminiError) {
+      console.error("Gemini API call failed:", geminiError);
+      // 200 OK with a spoken+visible apology — the frontend must NEVER hang silently
+      return await buildFallbackResponse();
+    }
+
     // Clean markdown if present
     aiResponseText = aiResponseText.replace(/```json/gi, '').replace(/```/gi, '').trim();
     
@@ -203,6 +238,7 @@ DO NOT wrap the response in markdown blocks like \`\`\`json. Just return the raw
 
   } catch (error) {
     console.error("Backend API Error:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    // 200 OK fallback: the farmer must always see/hear something, never a silent hang
+    return await buildFallbackResponse();
   }
 }
