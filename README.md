@@ -37,16 +37,30 @@ Agriculture is the backbone of Pakistan's economy, yet the majority of our farme
 
 If you want to run this project on your local machine, follow these steps:
 
-1. **Clone the repository:**
-   ```bash
-   git clone https://github.com/your-username/your-repo-name.git
+**Step 1: Clone the repository**
+```bash
+git clone https://github.com/your-username/your-repo-name.git
+```
 
-2. **Step 2: Install dependencies**
-   ```bash
-   install
+**Step 2: Install dependencies**
+```bash
+npm install
+```
 
-3. **Step 3: Set up Environment Variables Create a .env.local file in the root directory and add your Gemini API Key:**
-   ```evn
-   GEMINI_API_KEY=your_api_key_here
+**Step 3: Set up Environment Variables**
+Create a `.env.local` file in the root directory and add your Gemini API Key:
+```env
+GEMINI_API_KEY=your_api_key_here
+```
 
-   GEMINI_API_KEY=your_api_key_here
+**Step 4: Start the development server**
+```bash
+npm run dev
+```
+
+Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+
+---
+<div align="center">
+<i>Developed with ❤️ for the farmers of Pakistan by Syab Wazir.</i>
+</div>
