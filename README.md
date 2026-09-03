@@ -1,4 +1,4 @@
-# 🌱 Kisan-Dost AI (کسان دوست)
+# 🌱 KisanDost-AI (کسان دوست)
 **Empowering Pakistani Farmers with a Voice-First, Multilingual AI Assistant.**  
 Built for the Bano Qabil Alibaba Cloud AI Hackathon.
 🔗 **[Live Demo](https://kisandost-ai.vercel.app)** 
