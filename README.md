@@ -62,5 +62,5 @@ Open [http://localhost:3000](http://localhost:3000) with your browser to see the
 
 ---
 <div align="center">
-<i>Developed with ❤️ for the farmers of Pakistan by Syab Wazir.</i>
+<i>Developed with ❤️ for the farmers of Pakistan by Sayab Wazir.</i>
 </div>
