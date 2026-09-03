@@ -15,6 +15,7 @@ export default function Home() {
   const [messages, setMessages] = useState([]);
   const [isAudioPlaying, setIsAudioPlaying] = useState(false);
   const [isGeneratingTicket, setIsGeneratingTicket] = useState(false);
+  const [ticketReady, setTicketReady] = useState(false);
   
   const fileInputRef = useRef(null);
   const mediaRecorderRef = useRef(null);
@@ -22,6 +23,7 @@ export default function Home() {
   const audioRef = useRef(null);
   const imageFileRef = useRef(null);
   const weatherPromiseRef = useRef(null);
+  const ticketBlobRef = useRef(null);
   const [historyLoaded, setHistoryLoaded] = useState(false);
 
   // --- CONVERSATION HISTORY (localStorage) ---
@@ -251,11 +253,13 @@ export default function Home() {
     /Android|iPhone|iPad|iPod|Mobi/i.test(navigator.userAgent) ||
     (navigator.maxTouchPoints > 0 && window.matchMedia("(pointer: coarse)").matches);
 
-  const downloadTicket = async (idx) => {
+  // PHASE 1 (tap 1): render the ticket to a PNG blob and store it.
+  // iOS Safari kills the user-gesture chain if navigator.share() is called
+  // after slow async work (html2canvas takes 1-3s), so preparation and
+  // sharing are split into two separate taps.
+  const prepareTicket = async (idx) => {
     const card = document.getElementById(`ticket-${idx}`);
-    if (!card) return;
-    // Guard against spam-clicks while the ticket image is already being built
-    if (isGeneratingTicket) return;
+    if (!card || isGeneratingTicket) return;
     setIsGeneratingTicket(true);
     try {
       const canvas = await html2canvas(card, {
@@ -266,26 +270,39 @@ export default function Home() {
       });
       const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
       if (!blob) throw new Error("Image could not be created");
-      const file = new File([blob], "kisan-dost-ticket.png", { type: "image/png" });
+      ticketBlobRef.current = blob;
+      setTicketReady(true);
+    } catch (e) {
+      console.error("Ticket export failed:", e);
+      alert("Ticket ban nahi saka. Dobara koshish karein.");
+    } finally {
+      setIsGeneratingTicket(false);
+    }
+  };
 
-      // Mobile with Web Share API: native share sheet (iOS/Android)
-      if (isMobileDevice() && typeof navigator.share === "function") {
-        try {
-          const canShareFiles = typeof navigator.canShare === "function"
-            ? navigator.canShare({ files: [file] })
-            : false;
-          if (canShareFiles) {
-            await navigator.share({ files: [file], title: "Kisan-Dost Ticket" });
-          } else {
-            await navigator.share({ title: "Kisan-Dost Ticket", text: "Kisan-Dost AI Nuskha" });
-          }
-          return;
-        } catch (err) {
-          if (err && err.name === "AbortError") return; // user closed the share sheet
+  // PHASE 2 (tap 2): share/download the prepared blob with ZERO async delay,
+  // so iOS Safari still sees a valid user gesture.
+  const shareOrDownloadTicket = async () => {
+    const blob = ticketBlobRef.current;
+    if (!blob) return;
+    const file = new File([blob], "kisan-dost-ticket.png", { type: "image/png" });
+
+    if (isMobileDevice() && typeof navigator.share === "function") {
+      try {
+        const canShareFiles = typeof navigator.canShare === "function"
+          ? navigator.canShare({ files: [file] })
+          : false;
+        if (canShareFiles) {
+          await navigator.share({ files: [file], title: "Kisan-Dost Ticket" });
+        } else {
+          await navigator.share({ title: "Kisan-Dost Ticket", text: "Kisan-Dost AI Nuskha" });
+        }
+      } catch (err) {
+        if (err && err.name === "AbortError") {
+          // user closed the share sheet, do nothing
         }
       }
-
-      // Desktop / fallback: automatic <a> download
+    } else {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -294,12 +311,10 @@ export default function Home() {
       a.click();
       a.remove();
       setTimeout(() => URL.revokeObjectURL(url), 5000);
-    } catch (e) {
-      console.error("Ticket export failed:", e);
-      alert("Ticket save nahi ho saka. Barah-e-meherbani dobara koshish karein.");
-    } finally {
-      setIsGeneratingTicket(false);
     }
+    // Reset for next time
+    ticketBlobRef.current = null;
+    setTicketReady(false);
   };
 
   const startFresh = () => {
@@ -312,6 +327,8 @@ export default function Home() {
     setImagePreview(null);
     setImageName("");
     imageFileRef.current = null;
+    setTicketReady(false);
+    ticketBlobRef.current = null;
     if (fileInputRef.current) fileInputRef.current.value = "";
     if (audioRef.current) audioRef.current.pause();
   };
@@ -383,6 +400,9 @@ export default function Home() {
         // Append the AI answer to the conversation history
         if (data.response) {
           setMessages((prev) => [...prev, { role: 'ai', text: data.response, prescription: data.prescription }]);
+          // New answer = discard any previously prepared ticket image
+          setTicketReady(false);
+          ticketBlobRef.current = null;
         }
       } else {
         // Server problem: ALWAYS show something so the app never looks hung
@@ -641,10 +661,14 @@ export default function Home() {
                    </div>
                    
                    <button 
-                     onClick={() => downloadTicket(latestIdx)}
+                     onClick={() => (ticketReady ? shareOrDownloadTicket() : prepareTicket(latestIdx))}
                      disabled={isGeneratingTicket}
                      className={`mt-3 w-full text-white font-bold py-3 rounded-xl shadow-md transition-colors flex items-center justify-center gap-2 touch-manipulation
-                       ${isGeneratingTicket ? 'bg-gray-400 cursor-not-allowed opacity-70' : 'bg-agri-accent hover:bg-agri-green cursor-pointer'}`}
+                       ${isGeneratingTicket
+                         ? 'bg-gray-400 cursor-not-allowed opacity-70'
+                         : ticketReady
+                           ? 'bg-agri-green hover:bg-emerald-900 cursor-pointer'
+                           : 'bg-agri-accent hover:bg-agri-green cursor-pointer'}`}
                    >
                      {isGeneratingTicket ? (
                        <>
@@ -654,12 +678,19 @@ export default function Home() {
                          </svg>
                          ⏳ Ticket ban raha hai...
                        </>
+                     ) : ticketReady ? (
+                       <>
+                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6">
+                           <path strokeLinecap="round" strokeLinejoin="round" d="M9 8.25H7.5a2.25 2.25 0 00-2.25 2.25v9a2.25 2.25 0 002.25 2.25h9a2.25 2.25 0 002.25-2.25v-9a2.25 2.25 0 00-2.25-2.25H15m0-3l-3-3m0 0l-3 3m3-3V15" />
+                         </svg>
+                         📤 Share / Download Karein
+                       </>
                      ) : (
                        <>
                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6">
                            <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
                          </svg>
-                         Ticket Share / Download Karein
+                         📋 Ticket Tayyar Karein
                        </>
                      )}
                    </button>
