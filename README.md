@@ -66,3 +66,12 @@ Open [http://localhost:3000](http://localhost:3000) with your browser to see the
 <div align="center">
 <i>Developed with ❤️ for the farmers of Pakistan by Sayab Wazir.</i>
 </div>
+
+## 📊 Pitch Deck Presentation
+<img width="1920" height="1080" alt="1" src="https://github.com/user-attachments/assets/b8b99ad7-a55d-4a14-a68a-9cadd1beab33" />
+<img width="1920" height="1080" alt="2" src="https://github.com/user-attachments/assets/1b45839b-7927-4b4b-a40e-06b146e15571" />
+<img width="1920" height="1080" alt="3" src="https://github.com/user-attachments/assets/d692a16c-d38e-4cee-bad0-fd7f01b0d310" />
+<img width="1920" height="1080" alt="4" src="https://github.com/user-attachments/assets/1a34e9c7-3446-4132-87ca-381fc637fc16" />
+<img width="1920" height="1080" alt="5" src="https://github.com/user-attachments/assets/c321c9b2-db79-4dd3-890e-41068ce0160a" />
+<img width="1920" height="1080" alt="6" src="https://github.com/user-attachments/assets/71ae903d-1b79-4ddd-b27b-66d228227abb" />
+<img width="1920" height="1080" alt="7" src="https://github.com/user-attachments/assets/7e9c44b5-8e8b-494c-81cc-4cfaf6ddec16" />
