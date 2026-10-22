@@ -131,8 +131,9 @@ SITUATIONAL LOGIC RULES (STRICT):
 1) SILENCE CHECK FIRST (takes precedence over EVERY other rule): Listen to the audio. If it contains NO meaningful words at all (silent, empty, or only background noise), do NOT greet, do NOT guess, do NOT give any advice. Reply EXACTLY and ONLY with: "آپ کی آواز نہیں آئی، براہ مہربانی دوبارہ بتائیں۔" and set "prescription" to null.
 2) GREETINGS: If the user says "Hello", "Salam", or greets you (actual words are present), just greet them back politely in ONE sentence (e.g., "السلام علیکم! میں کسان دوست ہوں، اپنا مسئلہ بتائیں۔"). Do NOT hallucinate a crop disease. Do NOT give farming or weather advice on a greeting.
 3) CONDITIONAL WEATHER: Do NOT give weather advice unless the user specifically mentions a crop, a disease, or spraying. NEVER loop or repeat weather text across messages.
-4) TO-THE-POINT: Answer exactly what was asked, in a few short sentences, like a sharp practical human expert. Be extremely to-the-point. No rambling.
+4) TO-THE-POINT: Answer exactly what was asked, in a few short sentences, like a sharp practical human expert. Be extremely to-the-point. No rambling. Maximum 2 to 3 sentences.
 5) CREATOR INQUIRY: If the user asks who created you, who made you, who developed you, or anything about your origins, you MUST reply EXACTLY with this Urdu text: "مجھے سیاب وزیر نے بنایا ہے۔ مجھے بنانے کا اصل مقصد پاکستان کے کسانوں کی مدد کرنا ہے، خاص طور پر وہ کسان بھائی جو پڑھنا لکھنا نہیں جانتے، تاکہ وہ میری آواز سن کر اپنی فصلوں کے مسائل حل کر سکیں اور خوشحال ہو سکیں۔" Do NOT generate a prescription ticket for this question, just return this exact text and set "prescription" to null.
+6) NO WAITING PHRASES: NEVER include waiting phrases like "براہ کرم انتظار کریں" or "آپ کے مسئلے پر غور کیا جا رہا ہے" in your answer. The user has already waited; deliver the final expert advice directly without preambles.
 
 KNOWLEDGE BASE (Official Guidelines):
 ${knowledgeBase ? knowledgeBase : "No additional guidelines provided."}
@@ -180,16 +181,35 @@ DO NOT wrap the response in markdown blocks like \`\`\`json. Just return the raw
       });
     }
 
-    console.log("Sending multimodal request to Gemini 3.5 Flash Lite...");
+    console.log("Sending multimodal request to Gemini...");
 
-    let aiResponseText;
-    try {
-      // Use the model that has 15 RPM limit in the user's screenshot
-      const model = genAI.getGenerativeModel({ model: "gemini-3.5-flash-lite" });
-      const result = await model.generateContent(contents);
-      aiResponseText = result.response.text();
-    } catch (geminiError) {
-      console.error("Gemini API call failed:", geminiError);
+    const candidateModels = [
+      "gemini-3.5-flash-lite",
+      "gemini-3.5-flash",
+      "gemini-flash-lite-latest",
+    ];
+
+    let aiResponseText = null;
+    let lastError = null;
+
+    for (const modelName of candidateModels) {
+      try {
+        console.log(`Attempting Gemini model: ${modelName}...`);
+        const model = genAI.getGenerativeModel({ model: modelName });
+        const result = await model.generateContent(contents);
+        aiResponseText = result.response.text();
+        if (aiResponseText && aiResponseText.trim().length > 0) {
+          console.log(`Success with model: ${modelName}`);
+          break;
+        }
+      } catch (geminiError) {
+        console.warn(`Model ${modelName} failed, falling back to next:`, geminiError.message || geminiError);
+        lastError = geminiError;
+      }
+    }
+
+    if (!aiResponseText) {
+      console.error("All Gemini candidate models failed. Last error:", lastError);
       // 200 OK with a spoken+visible apology — the frontend must NEVER hang silently
       return await buildFallbackResponse();
     }

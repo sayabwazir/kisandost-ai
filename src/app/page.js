@@ -75,6 +75,65 @@ export default function Home() {
     }
   };
 
+  // --- IMAGE COMPRESSION LOGIC ---
+  const compressImage = async (file) => {
+    if (!file || file.size <= 800 * 1024) return file;
+
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new window.Image();
+        img.onload = () => {
+          try {
+            const canvas = document.createElement("canvas");
+            let { width, height } = img;
+            const maxDim = 1600;
+            if (width > maxDim || height > maxDim) {
+              if (width > height) {
+                height = Math.round((height * maxDim) / width);
+                width = maxDim;
+              } else {
+                width = Math.round((width * maxDim) / height);
+                height = maxDim;
+              }
+            }
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext("2d");
+            if (!ctx) {
+              resolve(file);
+              return;
+            }
+            ctx.drawImage(img, 0, 0, width, height);
+            canvas.toBlob(
+              (blob) => {
+                if (!blob) {
+                  resolve(file);
+                  return;
+                }
+                const compressed = new File([blob], file.name.replace(/\.[^.]+$/, ".jpg"), {
+                  type: "image/jpeg",
+                  lastModified: Date.now(),
+                });
+                console.log(`Image compressed from ${(file.size / 1024).toFixed(0)}KB to ${(compressed.size / 1024).toFixed(0)}KB`);
+                resolve(compressed);
+              },
+              "image/jpeg",
+              0.82
+            );
+          } catch (err) {
+            console.warn("Image compression failed, using original:", err);
+            resolve(file);
+          }
+        };
+        img.onerror = () => resolve(file);
+        img.src = e.target.result;
+      };
+      reader.onerror = () => resolve(file);
+      reader.readAsDataURL(file);
+    });
+  };
+
   // --- CAMERA LOGIC ---
   const handleCameraClick = () => {
     unlockAudioForIOS();
@@ -83,13 +142,12 @@ export default function Home() {
     }
   };
 
-  const handleImageChange = (e) => {
+  const handleImageChange = async (e) => {
     const file = e.target.files[0];
     if (file) {
       // Ignore extra selections while the AI is already busy
       if (isProcessing || isRecording) return;
 
-      imageFileRef.current = file;
       const imageUrl = URL.createObjectURL(file);
       setImagePreview(imageUrl);
       setImageName(file.name);
@@ -107,6 +165,10 @@ export default function Home() {
 
       // Log the photo in the conversation so follow-ups keep the context
       setMessages((prev) => [...prev, { role: 'user', text: 'Tasweer bheji gayi (photo)' }]);
+
+      // Compress client-side so high-res phone cameras never exceed Vercel 4.5MB limit
+      const optimizedFile = await compressImage(file);
+      imageFileRef.current = optimizedFile;
 
       // ONE-TAP: analyze the photo immediately, no mic press needed
       sendAudioToAPI(null);
@@ -185,7 +247,19 @@ export default function Home() {
         return;
       }
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      mediaRecorderRef.current = new MediaRecorder(stream);
+      let chosenMime = "";
+      if (typeof MediaRecorder.isTypeSupported === "function") {
+        if (MediaRecorder.isTypeSupported("audio/webm;codecs=opus")) {
+          chosenMime = "audio/webm;codecs=opus";
+        } else if (MediaRecorder.isTypeSupported("audio/webm")) {
+          chosenMime = "audio/webm";
+        } else if (MediaRecorder.isTypeSupported("audio/mp4")) {
+          chosenMime = "audio/mp4";
+        }
+      }
+      mediaRecorderRef.current = chosenMime
+        ? new MediaRecorder(stream, { mimeType: chosenMime })
+        : new MediaRecorder(stream);
       audioChunksRef.current = [];
       weatherPromiseRef.current = fetchWeatherContext(); // Fire-and-forget while user speaks
 
@@ -216,7 +290,8 @@ export default function Home() {
   const stopRecording = () => {
     if (mediaRecorderRef.current && isRecording) {
       mediaRecorderRef.current.onstop = () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        const mimeType = mediaRecorderRef.current?.mimeType || 'audio/webm';
+        const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
         
         // Reject only truly empty recordings; a quick word like "Hello"
         // is normally well above 2000 bytes and must NOT be blocked.
@@ -407,7 +482,8 @@ export default function Home() {
     try {
       const formData = new FormData();
       if (audioBlob) {
-        formData.append('audio', audioBlob, 'recording.webm');
+        const ext = audioBlob.type && audioBlob.type.includes('mp4') ? 'mp4' : 'webm';
+        formData.append('audio', audioBlob, `recording.${ext}`);
       }
       formData.append('language', language);
       
